@@ -1,4 +1,4 @@
-# revanew-engine
+# youtube-product-pack-generator
 RevAnew makes digital artifacts to bundle and package from an existing YouTube link 
 
 Core Value Proposition of RevAnew
