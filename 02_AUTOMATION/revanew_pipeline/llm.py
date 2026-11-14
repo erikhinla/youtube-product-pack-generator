@@ -46,7 +46,13 @@ def complete(system: str, user: str, max_tokens: int = 8000, temperature: float 
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
     with urllib.request.urlopen(req, timeout=300) as r:
         data = json.load(r)
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if not text.strip():
+        raise RuntimeError(
+            "Model returned no text (thinking-only response or max_tokens too small). "
+            "Increase max_tokens or add ANTHROPIC_MODEL=abliterated-model-large-flash."
+        )
+    return text
 
 
 def complete_json(system: str, user: str, max_tokens: int = 6000) -> dict:
