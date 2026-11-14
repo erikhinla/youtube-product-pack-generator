@@ -127,6 +127,26 @@ def stage_generate(cb: dict, text: str, outdir: Path, only: list, mock: bool):
         log(f"{key}: {len(dest.read_text())} chars -> {dest}")
 
 
+def stage_compile(outdir: Path):
+    """Compile every pack asset to a final PDF in pack/pdf/ (markdown = source, PDF = product)."""
+    pack = outdir / "pack"
+    pdfdir = pack / "pdf"
+    pdfdir.mkdir(exist_ok=True)
+    sys.path.insert(0, str(HERE))
+    from pdf_compile import compile_pdf
+    n = 0
+    for p in sorted(pack.iterdir()):
+        if p.suffix not in (".md", ".html") or not p.is_file():
+            continue
+        title = p.stem.replace("-", " ").replace("_", " ").title()
+        data = compile_pdf(title, p.read_text(), is_html=p.suffix == ".html")
+        dest = pdfdir / (p.stem + ".pdf")
+        dest.write_bytes(data)
+        log(f"pdf: {dest.name} ({len(data)} bytes)")
+        n += 1
+    log(f"compiled {n} PDFs -> {pdfdir}")
+
+
 def stage_package(outdir: Path, slug: str):
     zip_path = outdir.parent / f"{slug}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -147,7 +167,7 @@ def stage_drive(zip_path: Path, outdir: Path, slug: str):
         log("REVANEW_DRIVE_FOLDER not set; skipping Drive upload (files stay in 03_PRODUCTION)")
         return
     import subprocess
-    targets = [zip_path] + sorted((outdir / "pack").glob("*")) + [outdir / "concept-board.json"]
+    targets = [zip_path] + sorted((outdir / "pack" / "pdf").glob("*.pdf"))
     for p in targets:
         if not p.exists():
             continue
@@ -188,6 +208,7 @@ def main():
     text = stage_fetch(args.url, outdir, args.mock, args.transcript_file)
     cb = stage_analyze(text, outdir, args.mock)
     stage_generate(cb, text, outdir, only, args.mock)
+    stage_compile(outdir)
     stage_package(outdir, f"{base}-{stamp}")
     stage_drive(PROD / f"{base}-{stamp}.zip", outdir, f"{base}-{stamp}")
     log(f"DONE. Pack at {outdir}")
