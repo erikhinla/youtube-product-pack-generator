@@ -14,7 +14,7 @@ scene.render.resolution_y = h
 scene.render.fps = fps
 scene.frame_start = 1
 scene.frame_end = frames
-scene.engine = "CYCLES" if engine == "CYCLES" else "BLENDER_WORKBENCH"
+scene.render.engine = "CYCLES" if engine == "CYCLES" else "BLENDER_WORKBENCH"
 if engine == "CYCLES":
     scene.cycles.device = "CPU"
     scene.cycles.samples = 32

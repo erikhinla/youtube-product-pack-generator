@@ -20,7 +20,7 @@ def build(scene):
     cam.rotation_euler = rot
     scene.camera = cam
 
-    if not scene.objects.get("Sun"):
+    if not bpy.data.objects.get("Sun"):
         light = bpy.data.lights.new("Sun", "SUN")
         light.energy = 4
         lo = bpy.data.objects.new("Sun", light)

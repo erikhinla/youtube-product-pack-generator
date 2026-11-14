@@ -31,7 +31,7 @@ def main():
     cmd = [
         "blender", "--background", "--factory-startup",
         "--python", str(RUNNER), "--python-exit-code", "1", "--",
-        args.script, args.out, frames_dir, str(args.frames), args.fps, w, h, args.engine,
+        args.script, args.out, frames_dir, str(args.frames), str(args.fps), w, h, args.engine,
     ]
     subprocess.run(cmd, check=True)
 
