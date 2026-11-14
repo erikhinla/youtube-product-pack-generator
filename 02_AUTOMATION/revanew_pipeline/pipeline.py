@@ -27,13 +27,13 @@ PROD = ROOT / "03_PRODUCTION"
 # name -> (filename, what the LLM should produce)
 ASSET_DEFS = {
     "blog":        ("blog-post.md",            "Long-form blog post (800-1200 words) with H2/H3 structure, faithful to the video's frameworks."),
-    "ebook":       ("ebook.md",               "Short ebook (1500-2500 words): title page, 5 chapters, each chapter ends with one action step."),
+    "ebook":       ("ebook.md", "Short ebook (1500-2500 words): first line 'TITLE: <book title>', second line 'SUBTITLE: <one line>', then chapters each starting with '## Chapter N: <name>', every chapter ends with an 'ACTION STEP:' line."),
     "email":       ("email-sequence.md",       "5-email nurture sequence. Each email: subject, preview text, body (150-250 words), single CTA."),
     "social":      ("social-clips.md",         "5 short-form video scripts (30-60s each): hook line, beats, on-screen text suggestions, CTA."),
     "landing":     ("landing-page.html",       "Single-file landing page, HTML + inline CSS, dark background, sells the pack at the analyzed price. No stock images, no fake testimonials. Copy only from the analyzed frameworks."),
-    "avatar":      ("market-avatar-worksheet.md", "Market avatar worksheet: 8 fill-in sections derived from the video's audience."),
+    "avatar":      ("market-avatar-worksheet.md", "Market avatar worksheet: 8 sections. Each section starts with '## Section name' then 2-4 prompt questions as lines starting with '- '. This becomes a fill-in printable worksheet."),
     "blueprint":   ("messaging-blueprint.md",  "Messaging blueprint: audience, pain, promise, proof points, voice notes, offer ladder."),
-    "flashcards":  ("framework-flashcards.md", "Framework flashcards: 12 cards, front (question) / back (answer), extracted from the video's frameworks."),
+    "flashcards":  ("framework-flashcards.md", "Framework flashcards, EXACTLY this structure, 12 cards: each card starts with '### Card N' on its own line, next line starts with 'Q: ' (the question), following lines are the answer as plain text."),
     "audio":       ("audio-overview-script.md", "Script for a 5-minute audio overview of the pack, spoken-word style, no music cues needed."),
     "checklist":   ("implementation-checklist.md", "One-page implementation checklist a buyer can tick off in order."),
 }
@@ -57,6 +57,34 @@ def load_env():
 def slugify(url_or_name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", url_or_name.lower()).strip("-")
     return s[:50] or "revanew-pack"
+
+
+EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\U0001F170-\U0001F178\uFE0F]+")
+
+
+def sanitize(text: str, is_html: bool) -> str:
+    """Final-file hygiene: strip LLM preamble chatter, code fences, emoji markers."""
+    t = text.strip()
+    t = re.sub(r"^```[a-zA-Z]*\n", "", t)
+    t = re.sub(r"\n```\s*$", "", t)
+    if is_html:
+        low = t.lower()
+        i = low.find("<!doctype")
+        if i == -1:
+            i = low.find("<html")
+        if i != -1:
+            t = t[i:]
+        k = t.lower().rfind("</html>")
+        if k != -1:
+            t = t[: k + 7]
+    else:
+        lines = t.splitlines()
+        for n, l in enumerate(lines):
+            s = l.strip()
+            if s.startswith("# ") or s.startswith("## ") or s.startswith("TITLE:"):
+                t = "\n".join(lines[n:])
+                break
+    return EMOJI_RE.sub("", t).strip() + "\n"
 
 
 # ---------- stages ----------
@@ -114,16 +142,18 @@ def stage_generate(cb: dict, text: str, outdir: Path, only: list, mock: bool):
             dest.write_text(f"# {fname}\n\nMOCK ASSET for {key}. Frameworks: {', '.join(cb['core_frameworks'])}. Price: {cb['suggested_price']}.\n\n" + "Filler paragraph for plumbing test. " * 10)
         else:
             from llm import complete
-            dest.write_text(complete(
+            raw = complete(
                 system=(
                     "You are the RevAnew asset generator. Write in the creator's voice as described. "
                     "Use ONLY ideas grounded in the transcript. No invented statistics, no fake testimonials, "
-                    "no made-up numbers. Do not use em dashes.\n"
+                    "no made-up numbers. Do not use em dashes. "
+                    "Output ONLY the file content: no preamble, no meta commentary, no code fences, no emojis.\n"
                     f"Concept board: {json.dumps(cb)}\n"
                 ),
                 user=f"Produce this asset: {brief}\n\nSource transcript:\n{text[:30000]}",
-                max_tokens=8000,
-            ))
+                max_tokens=12000,
+            )
+            dest.write_text(sanitize(raw, fname.endswith(".html")))
         log(f"{key}: {len(dest.read_text())} chars -> {dest}")
 
 
@@ -134,17 +164,33 @@ def stage_compile(outdir: Path):
     pdfdir.mkdir(exist_ok=True)
     sys.path.insert(0, str(HERE))
     from pdf_compile import compile_pdf
+    from deliverables import cards_pdf, worksheet_pdf, ebook_pdf
+    designed = {"framework-flashcards.md": cards_pdf,
+                "market-avatar-worksheet.md": worksheet_pdf}
     n = 0
     for p in sorted(pack.iterdir()):
         if p.suffix not in (".md", ".html") or not p.is_file():
             continue
         title = p.stem.replace("-", " ").replace("_", " ").title()
-        data = compile_pdf(title, p.read_text(), is_html=p.suffix == ".html")
         dest = pdfdir / (p.stem + ".pdf")
-        dest.write_bytes(data)
-        log(f"pdf: {dest.name} ({len(data)} bytes)")
+        made = False
+        if p.name in designed:
+            made = designed[p.name](p.read_text(), str(dest))
+        elif p.name == "ebook.md":
+            made = ebook_pdf(p.read_text(), str(dest), price=cb_price(outdir))
+        if not made:
+            dest.write_bytes(compile_pdf(title, p.read_text(), is_html=p.suffix == ".html"))
+        log(f"pdf: {dest.name} ({dest.stat().st_size} bytes){' [designed]' if made else ''}")
         n += 1
     log(f"compiled {n} PDFs -> {pdfdir}")
+
+
+def cb_price(outdir: Path) -> str:
+    try:
+        import json as _json
+        return _json.loads((outdir / "concept-board.json").read_text()).get("suggested_price", "")
+    except Exception:
+        return ""
 
 
 def stage_package(outdir: Path, slug: str):

@@ -25,22 +25,8 @@ def _auth():
     return tok
 
 
-def complete(system: str, user: str, max_tokens: int = 8000, temperature: float = 0.4) -> str:
-    """One chat turn with retry. Thinking models sometimes burn the whole budget
-    on reasoning and return no text; escalate once, then fail loudly."""
-    budget = max_tokens
-    for attempt in (1, 2):
-        text = _complete_once(system, user, budget, temperature)
-        if text.strip():
-            return text
-        budget = min(budget * 3, 32000)
-    raise RuntimeError(
-        f"Model returned no text after 2 attempts (thinking-only). Try ANTHROPIC_MODEL=abliterated-model-large-flash."
-    )
-
-
-def _complete_once(system: str, user: str, max_tokens: int, temperature: float) -> str:
-    """One chat turn, returns text. Handles model-name normalization for proxies."""
+def _complete_once(system, messages, max_tokens, temperature):
+    """One API turn. Returns (text, stop_reason)."""
     model = os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
     base = (os.environ.get("ANTHROPIC_BASE_URL") or "https://api.anthropic.com").rstrip("/")
     url = f"{base}/v1/messages"
@@ -49,7 +35,7 @@ def _complete_once(system: str, user: str, max_tokens: int, temperature: float) 
         "max_tokens": max_tokens,
         "temperature": temperature,
         "system": system,
-        "messages": [{"role": "user", "content": user}],
+        "messages": messages,
     }
     headers = {
         "content-type": "application/json",
@@ -61,7 +47,30 @@ def _complete_once(system: str, user: str, max_tokens: int, temperature: float) 
     with urllib.request.urlopen(req, timeout=300) as r:
         data = json.load(r)
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    return text
+    return text, data.get("stop_reason")
+
+
+def complete(system: str, user: str, max_tokens: int = 12000, temperature: float = 0.4) -> str:
+    """One chat turn, auto-continuing truncated output and retrying thinking-empty turns."""
+    messages = [{"role": "user", "content": user}]
+    budget = max_tokens
+    out = ""
+    empty_left = 2
+    while True:
+        text, stop = _complete_once(system, messages, budget, temperature)
+        if not text.strip():
+            empty_left -= 1
+            if empty_left <= 0:
+                raise RuntimeError("Model returned no text after retries (thinking-only).")
+            budget = min(budget * 3, 32000)
+            continue
+        out += text
+        messages.append({"role": "assistant", "content": text})
+        if stop == "max_tokens" and len(out) < 120000:
+            messages.append({"role": "user", "content": "Continue exactly where you stopped. No preamble, no repeat."})
+            budget = min(max(budget, 16000), 32000)
+            continue
+        return out
 
 
 def complete_json(system: str, user: str, max_tokens: int = 6000) -> dict:
