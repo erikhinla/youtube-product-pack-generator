@@ -60,9 +60,12 @@ def slugify(url_or_name: str) -> str:
 
 # ---------- stages ----------
 
-def stage_fetch(url: str, outdir: Path, mock: bool) -> str:
+def stage_fetch(url: str, outdir: Path, mock: bool, transcript_file: str = "") -> str:
     tp = outdir / "transcript.txt"
-    if mock:
+    if transcript_file:
+        text = Path(transcript_file).read_text(errors="ignore")
+        log(f"manual transcript: {len(text)} chars from {transcript_file}")
+    elif mock:
         text = "MOCK TRANSCRIPT: In this video we cover the three-step framework for automating at scale. Step one: capture. Step two: package. Step three: liquidate the ad cost with a self-liquidating offer. " * 10
     else:
         sys.path.insert(0, str(HERE))
@@ -135,8 +138,9 @@ def stage_package(outdir: Path, slug: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("url")
+    ap.add_argument("url", nargs="?", default="manual")
     ap.add_argument("--slug")
+    ap.add_argument("--transcript-file", default="", help="path to a .txt you pasted from YouTube's transcript panel")
     ap.add_argument("--mock", action="store_true")
     ap.add_argument("--only", default=",".join(ASSET_DEFS))
     ap.add_argument("--force-new", action="store_true", help="reuse nothing, new run dir")
@@ -155,7 +159,7 @@ def main():
     if bad:
         sys.exit(f"unknown asset keys: {bad}. valid: {list(ASSET_DEFS)}")
 
-    text = stage_fetch(args.url, outdir, args.mock)
+    text = stage_fetch(args.url, outdir, args.mock, args.transcript_file)
     cb = stage_analyze(text, outdir, args.mock)
     stage_generate(cb, text, outdir, only, args.mock)
     stage_package(outdir, f"{base}-{stamp}")

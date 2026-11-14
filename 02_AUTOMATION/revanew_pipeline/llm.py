@@ -26,6 +26,20 @@ def _auth():
 
 
 def complete(system: str, user: str, max_tokens: int = 8000, temperature: float = 0.4) -> str:
+    """One chat turn with retry. Thinking models sometimes burn the whole budget
+    on reasoning and return no text; escalate once, then fail loudly."""
+    budget = max_tokens
+    for attempt in (1, 2):
+        text = _complete_once(system, user, budget, temperature)
+        if text.strip():
+            return text
+        budget = min(budget * 3, 32000)
+    raise RuntimeError(
+        f"Model returned no text after 2 attempts (thinking-only). Try ANTHROPIC_MODEL=abliterated-model-large-flash."
+    )
+
+
+def _complete_once(system: str, user: str, max_tokens: int, temperature: float) -> str:
     """One chat turn, returns text. Handles model-name normalization for proxies."""
     model = os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
     base = (os.environ.get("ANTHROPIC_BASE_URL") or "https://api.anthropic.com").rstrip("/")
@@ -47,11 +61,6 @@ def complete(system: str, user: str, max_tokens: int = 8000, temperature: float 
     with urllib.request.urlopen(req, timeout=300) as r:
         data = json.load(r)
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    if not text.strip():
-        raise RuntimeError(
-            "Model returned no text (thinking-only response or max_tokens too small). "
-            "Increase max_tokens or add ANTHROPIC_MODEL=abliterated-model-large-flash."
-        )
     return text
 
 
