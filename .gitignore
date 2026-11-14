@@ -1,0 +1,6 @@
+03_PRODUCTION/
+!**/03_PRODUCTION/.gitkeep
+.env
+__pycache__/
+*.pyc
+.DS_Store

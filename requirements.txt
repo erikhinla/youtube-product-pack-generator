@@ -1,5 +1,1 @@
-streamlit
-langchain
-langchain-community
 youtube-transcript-api
-openai

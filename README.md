@@ -1,28 +1,33 @@
-# youtube-product-pack-generator
-RevAnew makes digital artifacts to bundle and package from an existing YouTube link 
+# RevAnew / youtube-product-pack-generator
 
-Core Value Proposition of RevAnew
-Overcomes Production Bottlenecks: Human content creators often lack the operational time and bandwidth to package their video frameworks into sellable digital assets. RevAnew automates the technical construction and product creation process, allowing creators to match the production volume of AI-native competitors without losing their unique touch.
-Bridges the "Leaky Funnel": Creators traditionally face a binary revenue model—free YouTube viewers or high-ticket (400+)coursebuyers.RevAnewfillstheunmonetizedvoidbetweenthesetwoextremesbyconvertingpassivevideosintointermediate,low-cost(7 to $97) digital product ecosystems.
-Self-Liquidating Revenue Model: The low-ticket assets generated act as a Self-Liquidating Offer (SLO), covering customer acquisition and production costs upfront, making audience list expansion effectively free.
-Platform & Revenue Independence: Shifts creators away from volatile third-party affiliate reliance (like banking links or credit card offers) to an owned product library where they own customer data and retain higher profit margins.
+One YouTube video in, a sellable digital asset pack out. Two lanes share one transcript.
 
-How the RevAnew Algorithm Processes Content
-Transcript Extraction: Uses a specific YouTube video transcript as its raw input material.
-Style-Transfer LLM: Feeds the transcript into a Large Language Model (LLM) trained specifically on multiple years of the creator's past scripts and social posts.
-Voice & Framework Extraction: Replicates the creator's precise linguistic voice while extracting their underlying core business frameworks.
-Asset Shattering & Reassembly: "Shatters" the content's underlying DNA and reassembles it into both student execution assets and the surrounding marketing/sales infrastructure.
+## Lane A: asset pack (text + page products)
+`02_AUTOMATION/revanew_pipeline/pipeline.py` — fetch -> analyze -> generate -> package.
+Produces: blog post, ebook, 5-email sequence, 5 social clip scripts, landing page,
+market avatar worksheet, messaging blueprint, flashcards, audio overview script,
+implementation checklist. Output lands in `03_PRODUCTION/<slug>-<timestamp>/`.
 
-Assets Included in a Standard RevAnew Implementation Pack
-A standard implementation yields a 10-asset ecosystem designed for immediate execution:
-  Market Avatar Worksheet
-  Messaging Blueprint
-  Actionable Flashcards / Framework Cards
-  Audio Overviews
-  Landing Pages
-  Email Sequences
-  Additional implementation templates, action guides, and workbooks built to support student execution.
+```bash
+cd 02_AUTOMATION/revanew_pipeline
+cp .env.example .env        # fill keys over SSH; never paste keys in chat
+python3 pipeline.py "https://www.youtube.com/watch?v=VIDEOID" --mock   # plumbing test, no tokens
+python3 pipeline.py "https://www.youtube.com/watch?v=VIDEOID"          # real run
+python3 pipeline.py URL --only blog,email,landing                      # subset
+```
 
+LLM backend: Anthropic-compatible. Either `ANTHROPIC_API_KEY` direct or
+`ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` for the Abliterated proxy.
 
-Sources:
-hero bbm.automating at scale with infro.mp4
+## Lane B: Blender videos (Claude writes bpy, Blender renders)
+Claude generates Python (bpy) scripts; headless Blender renders them to MP4 with ffmpeg.
+Install with `01_SCRIPTS/install-blender.sh`. Verified working on this VPS with Cycles CPU.
+
+## Rules
+- Publish is manual. This repo generates drafts; nothing auto-posts.
+- No invented stats or testimonials in any asset (enforced in the generator prompts).
+- `.env` and `03_PRODUCTION/` are gitignored.
+
+## History
+`legacy/revanew_engine.py` is the original Streamlit GPT-4 concept stub (Oct 2026),
+kept for reference. The pipeline replaces it and no longer needs OpenAI or Streamlit.
