@@ -15,7 +15,8 @@ def build(scene):
     cam = bpy.data.objects.new("Cam", cam_data)
     scene.collection.objects.link(cam)
     cam.location = (5, -5, 3)
-    direction = (cam.location[0] - 0, cam.location[1] - 0, cam.location[2] - 0)
+    # aim camera at the origin: track -Z along (target - location)
+    direction = (-cam.location[0], -cam.location[1], -cam.location[2])
     rot = mathutils_rotation(direction)
     cam.rotation_euler = rot
     scene.camera = cam
