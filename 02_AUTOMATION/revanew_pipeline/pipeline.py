@@ -13,6 +13,7 @@ without spending tokens.
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import shutil
 import sys
@@ -136,6 +137,31 @@ def stage_package(outdir: Path, slug: str):
     return zip_path
 
 
+GWS = "/root/.venv/gws/bin/python /root/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+
+
+def stage_drive(zip_path: Path, outdir: Path, slug: str):
+    """Upload zip + individual pack files to the RevAnew Drive folder. Non-fatal."""
+    folder = os.environ.get("REVANEW_DRIVE_FOLDER", "")
+    if not folder:
+        log("REVANEW_DRIVE_FOLDER not set; skipping Drive upload (files stay in 03_PRODUCTION)")
+        return
+    import subprocess
+    targets = [zip_path] + sorted((outdir / "pack").glob("*")) + [outdir / "concept-board.json"]
+    for p in targets:
+        if not p.exists():
+            continue
+        name = f"{slug} - {p.name}" if p != zip_path else p.name
+        cmd = GWS.split() + ["drive", "upload", str(p), "--parent", folder, "--name", name]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            ok = '"status": "uploaded"' in r.stdout
+            log(f"drive {'UPLOADED' if ok else 'FAILED'}: {name}" + ("" if ok else f" :: {r.stdout[-200:]}{r.stderr[-200:]}"))
+        except Exception as e:
+            log(f"drive upload error for {name}: {e}")
+    log(f"Drive folder: https://drive.google.com/drive/folders/{folder}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("url", nargs="?", default="manual")
@@ -163,6 +189,7 @@ def main():
     cb = stage_analyze(text, outdir, args.mock)
     stage_generate(cb, text, outdir, only, args.mock)
     stage_package(outdir, f"{base}-{stamp}")
+    stage_drive(PROD / f"{base}-{stamp}.zip", outdir, f"{base}-{stamp}")
     log(f"DONE. Pack at {outdir}")
     log("Publish is manual: review the pack, then load storefront/social drafts yourself.")
 
